@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Footfall Data Platform</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 20px;
+        }
+        .top-stores, .graphs {
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Footfall Data Platform</h1>
+        
+        <!-- File Upload -->
+        <input type="file" id="fileInput" />
+        
+        <!-- Date Picker -->
+        <input type="date" id="datePicker" />
+        
+        <!-- Search Store -->
+        <input type="text" id="storeSearch" placeholder="Search Store..." />
+        
+        <!-- Table to Display Footfall Data -->
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Location</th>
+                    <th>Footfall</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data rows will be added here dynamically -->
+            </tbody>
+        </table>
+        
+        <!-- Section for Top Stores -->
+        <div class="top-stores">
+            <h2>Top Stores by Footfall</h2>
+            <ul id="topStoresList">
+                <!-- Top stores will be listed here dynamically -->
+            </ul>
+        </div>
+
+        <!-- Section for Graphs -->
+        <div class="graphs">
+            <h2>Footfall Bar Graphs</h2>
+            <canvas id="footfallByDay"></canvas>
+            <canvas id="totalFootfall"></canvas>
+        </div>
+    </div>
+
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Select the necessary HTML elements
+const fileInput = document.getElementById('fileInput');
+const datePicker = document.getElementById('datePicker');
+const storeSearch = document.getElementById('storeSearch');
+const dataTableBody = document.getElementById('dataTable').querySelector('tbody');
+const topStoresList = document.getElementById('topStoresList');
+const footfallByDayCtx = document.getElementById('footfallByDay').getContext('2d');
+const totalFootfallCtx = document.getElementById('totalFootfall').getContext('2d');
+
+let parsedData = [];
+
+// Function to parse the CSV file
+fileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        Papa.parse(file, {
+            header: true,
+            dynamicTyping: true,
+            complete: function(results) {
+                parsedData = results.data;
+                displayData(parsedData);
+                calculateTopStores(parsedData);
+                generateGraphs(parsedData);
+            }
+        });
+    }
+});
+
+// Function to display data in the table
+function displayData(data) {
+    dataTableBody.innerHTML = '';
+    data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${row.daydate}</td>
+            <td>${row.Location}</td>
+            <td>${row.Footfall}</td>
+        `;
+        dataTableBody.appendChild(tr);
+    });
+}
+
+// Function to calculate and display top stores
+function calculateTopStores(data) {
+    const storeTotals = {};
+    data.forEach(row => {
+        if (storeTotals[row.Location]) {
+            storeTotals[row.Location] += row.Footfall;
+        } else {
+            storeTotals[row.Location] = row.Footfall;
+        }
+    });
+
+    const topStores = Object.entries(storeTotals)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+    topStoresList.innerHTML = '';
+    topStores.forEach(store => {
+        const li = document.createElement('li');
+        li.textContent = `${store[0]}: ${store[1]} footfall`;
+        topStoresList.appendChild(li);
+    });
+}
+
+// Function to generate bar graphs
+function generateGraphs(data) {
+    const footfallByDay = {};
+    const totalFootfall = {};
+
+    data.forEach(row => {
+        if (!footfallByDay[row.daydate]) {
+            footfallByDay[row.daydate] = 0;
+        }
+        footfallByDay[row.daydate] += row.Footfall;
+
+        if (!totalFootfall[row.Location]) {
+            totalFootfall[row.Location] = 0;
+        }
+        totalFootfall[row.Location] += row.Footfall;
+    });
+
+    // Footfall by Day Graph
+    new Chart(footfallByDayCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(footfallByDay),
+            datasets: [{
+                label: 'Footfall by Day',
+                data: Object.values(footfallByDay),
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // Total Footfall Graph
+    new Chart(totalFootfallCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(totalFootfall),
+            datasets: [{
+                label: 'Total Footfall by Store',
+                data: Object.values(totalFootfall),
+                backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                borderColor: 'rgba(153, 102, 255, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+// Function to filter data based on store search
+storeSearch.addEventListener('input', () => {
+    const searchTerm = storeSearch.value.toLowerCase();
+    const filteredData = parsedData.filter(row => 
+        row.Location.toLowerCase().includes(searchTerm)
+    );
+    displayData(filteredData);
+    calculateTopStores(filteredData);
+    generateGraphs(filteredData);
+});
+
+    </script>
+</body>
+</html>
