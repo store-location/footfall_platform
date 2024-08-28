@@ -76,144 +76,161 @@
 
     <!-- JavaScript Logic -->
     <script>
-        // Select the necessary HTML elements
-const fileInput = document.getElementById('fileInput');
-const datePicker = document.getElementById('datePicker');
-const storeSearch = document.getElementById('storeSearch');
-const dataTableBody = document.getElementById('dataTable').querySelector('tbody');
-const topStoresList = document.getElementById('topStoresList');
-const footfallByDayCtx = document.getElementById('footfallByDay').getContext('2d');
-const totalFootfallCtx = document.getElementById('totalFootfall').getContext('2d');
+    // Select the necessary HTML elements
+    const fileInput = document.getElementById('fileInput');
+    const datePicker = document.getElementById('datePicker');
+    const storeSearch = document.getElementById('storeSearch');
+    const dataTableBody = document.getElementById('dataTable').querySelector('tbody');
+    const topStoresList = document.getElementById('topStoresList');
+    const footfallByDayCtx = document.getElementById('footfallByDay').getContext('2d');
+    const totalFootfallCtx = document.getElementById('totalFootfall').getContext('2d');
 
-let parsedData = [];
+    let parsedData = [];
 
-// Function to parse the CSV file
-fileInput.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (file) {
-        Papa.parse(file, {
-            header: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                parsedData = results.data;
-                displayData(parsedData);
-                calculateTopStores(parsedData);
-                generateGraphs(parsedData);
+    // Function to parse the CSV file
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    parsedData = transformData(results.data);
+                    displayData(parsedData);
+                    calculateTopStores(parsedData);
+                    generateGraphs(parsedData);
+                }
+            });
+        }
+    });
+
+    // Function to transform the data into a suitable format
+    function transformData(data) {
+        const transformed = [];
+        data.forEach(row => {
+            const date = row["daydate"]; // Assuming the first column is named "daydate"
+            for (let store in row) {
+                if (store !== "daydate" && row[store] !== undefined && row[store] !== '') {
+                    transformed.push({
+                        daydate: date,
+                        Location: store,
+                        Footfall: row[store]
+                    });
+                }
+            }
+        });
+        return transformed;
+    }
+
+    // Function to display data in the table
+    function displayData(data) {
+        dataTableBody.innerHTML = '';
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${row.daydate}</td>
+                <td>${row.Location}</td>
+                <td>${row.Footfall}</td>
+            `;
+            dataTableBody.appendChild(tr);
+        });
+    }
+
+    // Function to calculate and display top stores
+    function calculateTopStores(data) {
+        const storeTotals = {};
+        data.forEach(row => {
+            if (storeTotals[row.Location]) {
+                storeTotals[row.Location] += row.Footfall;
+            } else {
+                storeTotals[row.Location] = row.Footfall;
+            }
+        });
+
+        const topStores = Object.entries(storeTotals)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+        topStoresList.innerHTML = '';
+        topStores.forEach(store => {
+            const li = document.createElement('li');
+            li.textContent = `${store[0]}: ${store[1]} footfall`;
+            topStoresList.appendChild(li);
+        });
+    }
+
+    // Function to generate bar graphs
+    function generateGraphs(data) {
+        const footfallByDay = {};
+        const totalFootfall = {};
+
+        data.forEach(row => {
+            if (!footfallByDay[row.daydate]) {
+                footfallByDay[row.daydate] = 0;
+            }
+            footfallByDay[row.daydate] += row.Footfall;
+
+            if (!totalFootfall[row.Location]) {
+                totalFootfall[row.Location] = 0;
+            }
+            totalFootfall[row.Location] += row.Footfall;
+        });
+
+        // Footfall by Day Graph
+        new Chart(footfallByDayCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(footfallByDay),
+                datasets: [{
+                    label: 'Footfall by Day',
+                    data: Object.values(footfallByDay),
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Total Footfall Graph
+        new Chart(totalFootfallCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(totalFootfall),
+                datasets: [{
+                    label: 'Total Footfall by Store',
+                    data: Object.values(totalFootfall),
+                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
             }
         });
     }
-});
 
-// Function to display data in the table
-function displayData(data) {
-    dataTableBody.innerHTML = '';
-    data.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${row.daydate}</td>
-            <td>${row.Location}</td>
-            <td>${row.Footfall}</td>
-        `;
-        dataTableBody.appendChild(tr);
+    // Function to filter data based on store search
+    storeSearch.addEventListener('input', () => {
+        const searchTerm = storeSearch.value.toLowerCase();
+        const filteredData = parsedData.filter(row => 
+            row.Location.toLowerCase().includes(searchTerm)
+        );
+        displayData(filteredData);
+        calculateTopStores(filteredData);
+        generateGraphs(filteredData);
     });
-}
-
-// Function to calculate and display top stores
-function calculateTopStores(data) {
-    const storeTotals = {};
-    data.forEach(row => {
-        if (storeTotals[row.Location]) {
-            storeTotals[row.Location] += row.Footfall;
-        } else {
-            storeTotals[row.Location] = row.Footfall;
-        }
-    });
-
-    const topStores = Object.entries(storeTotals)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
-
-    topStoresList.innerHTML = '';
-    topStores.forEach(store => {
-        const li = document.createElement('li');
-        li.textContent = `${store[0]}: ${store[1]} footfall`;
-        topStoresList.appendChild(li);
-    });
-}
-
-// Function to generate bar graphs
-function generateGraphs(data) {
-    const footfallByDay = {};
-    const totalFootfall = {};
-
-    data.forEach(row => {
-        if (!footfallByDay[row.daydate]) {
-            footfallByDay[row.daydate] = 0;
-        }
-        footfallByDay[row.daydate] += row.Footfall;
-
-        if (!totalFootfall[row.Location]) {
-            totalFootfall[row.Location] = 0;
-        }
-        totalFootfall[row.Location] += row.Footfall;
-    });
-
-    // Footfall by Day Graph
-    new Chart(footfallByDayCtx, {
-        type: 'bar',
-        data: {
-            labels: Object.keys(footfallByDay),
-            datasets: [{
-                label: 'Footfall by Day',
-                data: Object.values(footfallByDay),
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-
-    // Total Footfall Graph
-    new Chart(totalFootfallCtx, {
-        type: 'bar',
-        data: {
-            labels: Object.keys(totalFootfall),
-            datasets: [{
-                label: 'Total Footfall by Store',
-                data: Object.values(totalFootfall),
-                backgroundColor: 'rgba(153, 102, 255, 0.2)',
-                borderColor: 'rgba(153, 102, 255, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-}
-
-// Function to filter data based on store search
-storeSearch.addEventListener('input', () => {
-    const searchTerm = storeSearch.value.toLowerCase();
-    const filteredData = parsedData.filter(row => 
-        row.Location.toLowerCase().includes(searchTerm)
-    );
-    displayData(filteredData);
-    calculateTopStores(filteredData);
-    generateGraphs(filteredData);
-});
-
-    </script>
+</script>
 </body>
 </html>
